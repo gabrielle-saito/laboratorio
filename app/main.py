@@ -9,6 +9,7 @@ Casos:
   4 - API gera link assinado de DOWNLOAD (presigned GET) com validade curta
   5 - Auditoria: compara o que existe no banco com o que existe no bucket
 """
+import hashlib
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -104,6 +105,7 @@ def caso1_upload(arquivo: UploadFile = File(...)):
     conteudo = arquivo.file.read()
     if len(conteudo) > TAMANHO_MAXIMO:
         raise HTTPException(413, "Arquivo maior que 10 MB")
+    hash_sha256 = hashlib.sha256(conteudo).hexdigest()
 
     chave = nova_chave("caso1", arquivo.filename)
     content_type = arquivo.content_type or "application/octet-stream"
@@ -114,9 +116,9 @@ def caso1_upload(arquivo: UploadFile = File(...)):
     # 2) grava no Postgres (metadados + os próprios bytes)
     with db() as conn:
         (novo_id,) = conn.execute(
-            "INSERT INTO arquivos (caso, nome, content_type, tamanho, chave_objeto, conteudo) "
-            "VALUES ('caso1', %s, %s, %s, %s, %s) RETURNING id",
-            (arquivo.filename, content_type, len(conteudo), chave, conteudo),
+            "INSERT INTO arquivos (caso, nome, content_type, tamanho, chave_objeto, conteudo, hash_sha256) "
+            "VALUES ('caso1', %s, %s, %s, %s, %s, %s) RETURNING id",
+            (arquivo.filename, content_type, len(conteudo), chave, conteudo, hash_sha256),
         ).fetchone()
 
     return {"id": novo_id, "nome": arquivo.filename, "tamanho": len(conteudo), "chave_objeto": chave}
